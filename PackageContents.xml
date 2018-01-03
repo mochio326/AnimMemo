@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.7.1"
+	ProductType="Application"
+
+	AutodeskProduct="Maya"
+	Name="AnimMemo"
+	Description="Autodesk Maya AnimMemo"
+	AppVersion="1.7.1"
+	Author="mochio"
+	AppNameSpace="com.autodesk.exchange.maya.AnimMemo"
+	HelpFile=""
+	OnlineDocumentation="https://github.com/mochio326/AnimMemo"
+
+	ProductCode="*"
+>
+	
+	<CompanyDetails Name="mochio"
+		Phone=" "
+		Url="https://github.com/mochio326"
+		Email="326mochio@gmail.com" />
+
+	<RuntimeRequirements SupportPath="./Contents" OS="win64|macOS|linux" Platform="Maya" SeriesMin="2015"/>
+
+	<Components>
+		<RuntimeRequirements SupportPath="./Contents" OS="win64" Platform="Maya" SeriesMin="2015"/>
+		<ComponentEntry ModuleName="./scripts/userSetup.py" />
+	</Components>
+	
+</ApplicationPackage>
