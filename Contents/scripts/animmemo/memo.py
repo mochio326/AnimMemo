@@ -3,9 +3,7 @@ from .vendor.Qt import QtCore, QtGui, QtWidgets
 import maya.cmds as cmds
 import maya.mel as mel
 import maya.OpenMayaUI as OpenMayaUI
-
-import uuid
-import random
+import maya.OpenMaya as OpenMaya
 
 def maya_api_version():
     return int(cmds.about(api=True))
@@ -15,7 +13,6 @@ if 201700 <= maya_api_version() and maya_api_version() < 201800:
 else:
     import shiboken
 
-
 class AnimMemo(QtWidgets.QWidget):
     URL = "https://github.com/mochio326/AnimMemo"
     VAR = '0.0.1'
@@ -23,37 +20,84 @@ class AnimMemo(QtWidgets.QWidget):
     LAYOUT_NAME = 'AnimMemoLayout'
 
     def __init__(self):
+        self.data = []
+        self.data.append({'fr': [3, 20], 'bg_color': [255, 0, 0], 'comment': u'もうちょっといい感じに緩急つける'})
+        self.data.append({'fr': [15, 30], 'bg_color': [0, 0, 255], 'comment': u'バーンとしてドーンにする'})
+        self.data.append({'fr': [50, 100], 'bg_color': [255, 255, 0], 'comment': u'いい感じ！問題なし！'})
+
         _p = _get_timeline_wiget()
         super(AnimMemo, self).__init__(_p)
+        self.callback = []
 
+        _layout = self._get_layout()
+        self._delete_memo_wiget()
+
+        _layout.addWidget(self)
         self.setMouseTracking(True)
+        self.setObjectName(self.OJB_NAME)
 
-        _layout = None
+        jobs = cmds.scriptJob(listJobs=True)
+        for _j in jobs:
+            if 'AnimMemo._view_message' in _j:
+                job_num = _j.split(':')[0]
+                cmds.scriptJob(kill=int(job_num), force=True)
+
+        cmds.scriptJob(event=['timeChanged', self._view_message])
+        cmds.scriptJob(cc=['playingBack', self._view_message])
+
+        self.add_time_slider_menu()
+        self.add_callback()
+
+    def add_time_slider_menu(self):
+        _original_menu = 'AnimMemoTimeSliderMenu'
+        if not cmds.menuItem(_original_menu, q=True, ex=True):
+            if maya_api_version() >= 201100:
+                mel.eval('updateTimeSliderMenu TimeSliderMenu')
+
+            _menu_name = 'TimeSliderMenu'
+            cmds.menuItem(divider=True, p=_menu_name)
+            cmds.menuItem(_original_menu, subMenu=True, label='AnimMemo Menu', p=_menu_name)
+            cmds.menuItem(label='DeleteAll',
+                          ann='Delete All Memo',
+                          c=self._delete_memo_wiget)
+
+    def _delete_memo_wiget(self, *args):
+        _p = _get_timeline_wiget()
         for _c in _p.children():
             if _c.objectName() == self.OJB_NAME:
                 _c.deleteLater()
+
+    def _get_layout(self):
+        _p = _get_timeline_wiget()
+        for _c in _p.children():
             if _c.objectName() == self.LAYOUT_NAME:
-                _layout = _c
+                return _c
+        #make new layout
+        _layout = QtWidgets.QHBoxLayout(_p)
+        _layout.setContentsMargins(0, 0, 0, 0)
+        _p.setLayout(_layout)
+        _layout.setObjectName(self.LAYOUT_NAME)
+        return _layout
 
-        self.setObjectName(self.OJB_NAME)
-
-        if not _layout:
-            _layout = QtWidgets.QHBoxLayout(_p)
-            _layout.setContentsMargins(0, 0, 0, 0)
-            _p.setLayout(_layout)
-            _layout.setObjectName(self.LAYOUT_NAME)
-
-        _layout.addWidget(self)
-
-        self.data = []
-        self.data.append({'fr': [3, 5], 'bg_color': [255, 0, 255], 'comment': u'゜◦〇Ξ ～ヾ(*´▽｀*)〇ｿﾚｯ'})
-        self.data.append({'fr': [15, 30], 'bg_color': [0, 0, 255], 'comment': u'三┗(┓卍^o^)卍ﾄﾞｩﾙﾙﾙﾙ'})
+    def _view_message(self):
+        _t = cmds.currentTime(q=True)
+        comment = ''
+        for _d in self.data:
+            _fr = _d['fr']
+            if _fr[0] <= _t <= _fr[1]:
+                if comment != '':
+                    comment += '\r\n'
+                comment += _d['comment']
+        if comment != '':
+            cmds.inViewMessage(amg=comment, pos='midCenter', fade=True)
+        else:
+            cmds.inViewMessage(clear='midCenter')
 
     def paintEvent(self, event):
         for d in self.data:
-            self._make_memo(event, d['fr'], d['bg_color'])
+            self._draw_timeline_memo(event, d['fr'], d['bg_color'])
 
-    def _make_memo(self, event, fr, bg_color):
+    def _draw_timeline_memo(self, event, fr, bg_color):
         # スタイルシートを利用
         super(AnimMemo, self).paintEvent(event)
         opt = QtWidgets.QStyleOption()
@@ -105,13 +149,26 @@ class AnimMemo(QtWidgets.QWidget):
         if comment:
             QtWidgets.QToolTip.showText(event.globalPos(), comment, self, QtCore.QRect(0, 0, self.width(), 0))
 
+    def deleteLater(self):
+        #remove callback
+        for _id in self.callback:
+            OpenMaya.MMessage.removeCallback(_id)
+        QtWidgets.QWidget.deleteLater(self)
+
+    def add_callback(self):
+        _id1 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterNew, self._delete_memo_wiget)
+        _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self._delete_memo_wiget)
+        self.callback = [_id1, _id2]
+
     def _get_position_to_comment(self, event):
-        comment = None
+        comment = ''
         x = event.pos().x()
-        for d in self.data:
-            _pos, _w = self._get_draw_position_width(d['fr'])
+        for _d in self.data:
+            _pos, _w = self._get_draw_position_width(_d['fr'])
             if _pos < x < _pos + _w:
-                comment = d['comment']
+                if comment != '':
+                    comment += '\r\n'
+                comment += _d['comment']
         return comment
 
 # #################################################################################################
