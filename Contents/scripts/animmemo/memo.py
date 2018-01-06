@@ -36,17 +36,18 @@ class AnimMemo(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.setObjectName(self.OJB_NAME)
 
-        jobs = cmds.scriptJob(listJobs=True)
-        for _j in jobs:
-            if 'AnimMemo._view_message' in _j:
-                job_num = _j.split(':')[0]
-                cmds.scriptJob(kill=int(job_num), force=True)
-
         cmds.scriptJob(event=['timeChanged', self._view_message])
         cmds.scriptJob(cc=['playingBack', self._view_message])
 
         self.add_time_slider_menu()
         self.add_callback()
+
+    def _delete_script_job(self):
+        jobs = cmds.scriptJob(listJobs=True)
+        for _j in jobs:
+            if 'AnimMemo._view_message' in _j:
+                job_num = _j.split(':')[0]
+                cmds.scriptJob(kill=int(job_num), force=True)
 
     def add_time_slider_menu(self):
         _original_menu = 'AnimMemoTimeSliderMenu'
@@ -153,6 +154,7 @@ class AnimMemo(QtWidgets.QWidget):
         #remove callback
         for _id in self.callback:
             OpenMaya.MMessage.removeCallback(_id)
+        self._delete_script_job()
         QtWidgets.QWidget.deleteLater(self)
 
     def add_callback(self):
