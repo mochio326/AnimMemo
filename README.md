@@ -1,9 +1,10 @@
-# Animmemo [Var.0.0.1]
+# AnimMemo [Var.0.0.1]
 
 Mayaのタイムラインにメモがとれるツール
 
 ## 改訂履歴
 
+![AnimMemo](/images/01.gif)
 
 ## ライセンス
 
