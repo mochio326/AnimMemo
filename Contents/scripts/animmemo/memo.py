@@ -4,6 +4,7 @@ import maya.cmds as cmds
 import maya.mel as mel
 import maya.OpenMayaUI as OpenMayaUI
 import maya.OpenMaya as OpenMaya
+import json
 
 def maya_api_version():
     return int(cmds.about(api=True))
@@ -19,18 +20,18 @@ class AnimMemo(QtWidgets.QWidget):
     OJB_NAME = 'AnimMemoWidget'
     LAYOUT_NAME = 'AnimMemoLayout'
 
-    def __init__(self):
-        self.data = []
-        self.data.append({'fr': [3, 20], 'bg_color': [255, 0, 0], 'comment': u'もうちょっといい感じに緩急つける'})
-        self.data.append({'fr': [15, 30], 'bg_color': [0, 0, 255], 'comment': u'バーンとしてドーンにする'})
-        self.data.append({'fr': [50, 100], 'bg_color': [255, 255, 0], 'comment': u'いい感じ！問題なし！'})
-
+    def __init__(self, data=None):
+        if data is None:
+            self._draw_data = []
+        else:
+            self._draw_data = data
         _p = _get_timeline_wiget()
         super(AnimMemo, self).__init__(_p)
         self.callback = []
 
+    def setup(self):
         _layout = self._get_layout()
-        self._delete_memo_wiget()
+        self.delete_memo_wiget()
 
         _layout.addWidget(self)
         self.setMouseTracking(True)
@@ -51,18 +52,55 @@ class AnimMemo(QtWidgets.QWidget):
 
     def add_time_slider_menu(self):
         _original_menu = 'AnimMemoTimeSliderMenu'
-        if not cmds.menuItem(_original_menu, q=True, ex=True):
-            if maya_api_version() >= 201100:
-                mel.eval('updateTimeSliderMenu TimeSliderMenu')
+        if cmds.menuItem(_original_menu, q=True, ex=True):
+            return
 
-            _menu_name = 'TimeSliderMenu'
-            cmds.menuItem(divider=True, p=_menu_name)
-            cmds.menuItem(_original_menu, subMenu=True, label='AnimMemo Menu', p=_menu_name)
-            cmds.menuItem(label='DeleteAll',
-                          ann='Delete All Memo',
-                          c=self._delete_memo_wiget)
+        if maya_api_version() >= 201100:
+            mel.eval('updateTimeSliderMenu TimeSliderMenu')
 
-    def _delete_memo_wiget(self, *args):
+        _menu_name = 'TimeSliderMenu'
+        cmds.menuItem(divider=True, p=_menu_name)
+
+        cmds.menuItem(_original_menu, subMenu=True, label='AnimMemo Menu', p=_menu_name)
+        cmds.menuItem(label='DeleteAll',
+                      ann='Delete All Memo',
+                      c=self.delete_all_memo)
+
+        cmds.menuItem(divider=True, p=_original_menu)
+
+        cmds.menuItem(label='ExportFile',
+                      ann='ExportFile',
+                      c=self.export_data)
+
+        cmds.menuItem(label='ImportFile',
+                      ann='ImportFile',
+                      c=self.import_data)
+
+    def export_data(self, *args):
+        _path = QtWidgets.QFileDialog.getSaveFileName(self, "ExportFile", "Result.animmemo", filter="animmemo (*.animmemo)")
+        _path = _path[0]
+        if _path == '':
+            return
+        text = json.dumps(self._draw_data, sort_keys=True, ensure_ascii=False, indent=2)
+        with open(_path, "w") as fh:
+            fh.write(text.encode("utf-8"))
+
+    def import_data(self, *args):
+        _path = QtWidgets.QFileDialog.getOpenFileName(self, "ImportFile", "Result.animmemo", filter="animmemo (*.animmemo)")
+        _path = _path[0]
+        if _path == '':
+            return
+        with open(_path) as fh:
+            self._draw_data = json.loads(fh.read(), "utf-8")
+        self._draw_timeline_memo()
+        self.repaint()
+
+    def delete_all_memo(self, *args):
+        self._draw_data = []
+        self._draw_timeline_memo()
+        self.repaint()
+
+    def delete_memo_wiget(self, *args):
         _p = _get_timeline_wiget()
         for _c in _p.children():
             if _c.objectName() == self.OJB_NAME:
@@ -83,7 +121,7 @@ class AnimMemo(QtWidgets.QWidget):
     def _view_message(self):
         _t = cmds.currentTime(q=True)
         comment = ''
-        for _d in self.data:
+        for _d in self._draw_data:
             _fr = _d['fr']
             if _fr[0] <= _t <= _fr[1]:
                 if comment != '':
@@ -95,12 +133,14 @@ class AnimMemo(QtWidgets.QWidget):
             cmds.inViewMessage(clear='midCenter')
 
     def paintEvent(self, event):
-        for d in self.data:
-            self._draw_timeline_memo(event, d['fr'], d['bg_color'])
-
-    def _draw_timeline_memo(self, event, fr, bg_color):
-        # スタイルシートを利用
         super(AnimMemo, self).paintEvent(event)
+        self._draw_timeline_memo()
+
+    def _draw_timeline_memo(self):
+        for d in self._draw_data:
+            self._draw_single( d['fr'], d['bg_color'])
+
+    def _draw_single(self, fr, bg_color):
         opt = QtWidgets.QStyleOption()
         opt.initFrom(self)
         p = QtGui.QPainter(self)
@@ -158,14 +198,14 @@ class AnimMemo(QtWidgets.QWidget):
         QtWidgets.QWidget.deleteLater(self)
 
     def add_callback(self):
-        _id1 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterNew, self._delete_memo_wiget)
-        _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self._delete_memo_wiget)
+        _id1 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterNew, self.delete_all_memo)
+        _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self.delete_all_memo)
         self.callback = [_id1, _id2]
 
     def _get_position_to_comment(self, event):
         comment = ''
         x = event.pos().x()
-        for _d in self.data:
+        for _d in self._draw_data:
             _pos, _w = self._get_draw_position_width(_d['fr'])
             if _pos < x < _pos + _w:
                 if comment != '':
@@ -190,7 +230,11 @@ def _get_timeline_highlight_range():
     return _r[0], _r[1]
 
 def main():
-    AnimMemo()
+    data = []
+    data.append({'fr': [3, 20], 'bg_color': [255, 0, 0], 'comment': u'もうちょっといい感じに緩急つける'})
+    data.append({'fr': [15, 30], 'bg_color': [0, 0, 255], 'comment': u'バーンとしてドーンにする'})
+    data.append({'fr': [50, 100], 'bg_color': [255, 255, 0], 'comment': u'いい感じ！問題なし！'})
+    AnimMemo(data)
 
 #-----------------------------------------------------------------------------
 # EOF
