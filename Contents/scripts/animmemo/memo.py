@@ -5,6 +5,7 @@ import maya.mel as mel
 import maya.OpenMayaUI as OpenMayaUI
 import maya.OpenMaya as OpenMaya
 import json
+from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 def maya_api_version():
     return int(cmds.about(api=True))
@@ -62,6 +63,15 @@ class AnimMemo(QtWidgets.QWidget):
         cmds.menuItem(divider=True, p=_menu_name)
 
         cmds.menuItem(_original_menu, subMenu=True, label='AnimMemo Menu', p=_menu_name)
+
+
+        cmds.menuItem(label='Create',
+                      ann='Create Mew Memo',
+                      c=self.new_memo)
+
+        cmds.menuItem(divider=True, p=_original_menu)
+
+
         cmds.menuItem(label='DeleteAll',
                       ann='Delete All Memo',
                       c=self.delete_all_memo)
@@ -75,6 +85,18 @@ class AnimMemo(QtWidgets.QWidget):
         cmds.menuItem(label='ImportFile',
                       ann='ImportFile',
                       c=self.import_data)
+
+    def new_memo(self, *args):
+        _result, _comment = NewMemo.modal()
+        if _result is False:
+            return
+        _fr = _get_timeline_renge()
+        _color = [128, 128, 128]
+        _dict = {'comment':_comment, 'fr':_fr, 'bg_color':_color}
+        self._draw_data.append(_dict)
+        self._draw_timeline_memo()
+        self.repaint()
+
 
     def export_data(self, *args):
         _path = QtWidgets.QFileDialog.getSaveFileName(self, "ExportFile", "Result.animmemo", filter="animmemo (*.animmemo)")
@@ -213,6 +235,42 @@ class AnimMemo(QtWidgets.QWidget):
                 comment += _d['comment']
         return comment
 
+class NewMemo(QtWidgets.QDialog):
+
+    def __init__(self, parent):
+        super(NewMemo, self).__init__(parent)
+
+        self.le = QtWidgets.QLineEdit(self)
+
+        # ダイアログのOK/キャンセルボタンを用意
+        btns = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
+            QtCore.Qt.Horizontal, self)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+
+        gl = QtWidgets.QVBoxLayout()
+        gl.addWidget(QtWidgets.QLabel("Comment", self))
+        gl.addWidget(self.le)
+        gl.addWidget(btns)
+        self.setLayout(gl)
+
+        self.setGeometry(300, 300, 290, 150)
+        self.setWindowTitle('New Memo')
+        self.show()
+
+    def get_comment(self):
+        return self.le.text()
+
+    @staticmethod
+    def modal(parent=None):
+        u"""ダイアログを開いてキャンバスサイズとOKキャンセルを返す."""
+        dialog = NewMemo(parent)
+        result = dialog.exec_()  # ダイアログを開く
+        comment = dialog.get_comment()
+        print result == QtWidgets.QDialog.Accepted, comment
+        return result == QtWidgets.QDialog.Accepted, comment
+
 # #################################################################################################
 
 def _get_play_back_slider():
@@ -229,12 +287,9 @@ def _get_timeline_highlight_range():
     _r = cmds.timeControl(_pbs, q=True, ra=True)
     return _r[0], _r[1]
 
-def main():
-    data = []
-    data.append({'fr': [3, 20], 'bg_color': [255, 0, 0], 'comment': u'もうちょっといい感じに緩急つける'})
-    data.append({'fr': [15, 30], 'bg_color': [0, 0, 255], 'comment': u'バーンとしてドーンにする'})
-    data.append({'fr': [50, 100], 'bg_color': [255, 255, 0], 'comment': u'いい感じ！問題なし！'})
-    AnimMemo(data)
+def _get_timeline_renge():
+    r = cmds.timeControl(_get_play_back_slider(), query=True, ra=True)
+    return [int(r[0]), int(r[1]) - 1]
 
 #-----------------------------------------------------------------------------
 # EOF
