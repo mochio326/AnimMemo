@@ -5,7 +5,6 @@ import maya.mel as mel
 import maya.OpenMayaUI as OpenMayaUI
 import maya.OpenMaya as OpenMaya
 import json
-from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
 def maya_api_version():
     return int(cmds.about(api=True))
@@ -64,13 +63,11 @@ class AnimMemo(QtWidgets.QWidget):
 
         cmds.menuItem(_original_menu, subMenu=True, label='AnimMemo Menu', p=_menu_name)
 
-
         cmds.menuItem(label='Create',
                       ann='Create Mew Memo',
                       c=self.new_memo)
 
         cmds.menuItem(divider=True, p=_original_menu)
-
 
         cmds.menuItem(label='DeleteAll',
                       ann='Delete All Memo',
@@ -87,7 +84,7 @@ class AnimMemo(QtWidgets.QWidget):
                       c=self.import_data)
 
     def new_memo(self, *args):
-        _result, _comment = NewMemo.modal()
+        _result, _comment = NewMemo.gui()
         if _result is False:
             return
         _fr = _get_timeline_renge()
@@ -96,7 +93,6 @@ class AnimMemo(QtWidgets.QWidget):
         self._draw_data.append(_dict)
         self._draw_timeline_memo()
         self.repaint()
-
 
     def export_data(self, *args):
         _path = QtWidgets.QFileDialog.getSaveFileName(self, "ExportFile", "Result.animmemo", filter="animmemo (*.animmemo)")
@@ -240,7 +236,14 @@ class NewMemo(QtWidgets.QDialog):
     def __init__(self, parent):
         super(NewMemo, self).__init__(parent)
 
-        self.le = QtWidgets.QLineEdit(self)
+        self.le = QtWidgets.QTextEdit(self)
+        self.fr_start = QtWidgets.QSpinBox(self)
+        self.fr_end = QtWidgets.QSpinBox(self)
+        self.fr_start.setFixedWidth(80)
+        self.fr_end.setFixedWidth(80)
+
+        horizontal_spacer_item = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+
 
         # ダイアログのOK/キャンセルボタンを用意
         btns = QtWidgets.QDialogButtonBox(
@@ -249,21 +252,32 @@ class NewMemo(QtWidgets.QDialog):
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
 
-        gl = QtWidgets.QVBoxLayout()
-        gl.addWidget(QtWidgets.QLabel("Comment", self))
-        gl.addWidget(self.le)
-        gl.addWidget(btns)
-        self.setLayout(gl)
+        vb = QtWidgets.QVBoxLayout()
 
-        self.setGeometry(300, 300, 290, 150)
+        hb = QtWidgets.QHBoxLayout()
+        hb.addWidget(QtWidgets.QLabel("Comment", self))
+        hb.addWidget(self.le)
+        vb.addLayout(hb)
+
+        hb = QtWidgets.QHBoxLayout()
+        hb.addItem(horizontal_spacer_item)
+        hb.addWidget(self.fr_start)
+        hb.addWidget(QtWidgets.QLabel(u'～', self))
+        hb.addWidget(self.fr_end)
+        vb.addLayout(hb)
+
+        vb.addWidget(btns)
+        self.setLayout(vb)
+
+        #self.setGeometry(300, 300, 290, 150)
         self.setWindowTitle('New Memo')
         self.show()
 
     def get_comment(self):
-        return self.le.text()
+        return self.le.toPlainText()
 
     @staticmethod
-    def modal(parent=None):
+    def gui(parent=None):
         u"""ダイアログを開いてキャンバスサイズとOKキャンセルを返す."""
         dialog = NewMemo(parent)
         result = dialog.exec_()  # ダイアログを開く
