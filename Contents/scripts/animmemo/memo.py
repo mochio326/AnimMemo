@@ -29,6 +29,10 @@ class AnimMemo(QtWidgets.QWidget):
         super(AnimMemo, self).__init__(_p)
         self.callback = []
 
+        self.change_time_range = False
+        self.def_time_range_min = None
+        self.def_time_range_max = None
+
     def setup(self):
         _layout = self._get_layout()
         self.delete_memo_wiget()
@@ -84,12 +88,10 @@ class AnimMemo(QtWidgets.QWidget):
                       c=self.import_data)
 
     def new_memo(self, *args):
-        _result, _comment = NewMemo.gui()
+        _result, _comment, _fr, _color = NewMemo.gui(fr=_get_timeline_renge())
         if _result is False:
             return
-        _fr = _get_timeline_renge()
-        _color = [128, 128, 128]
-        _dict = {'comment':_comment, 'fr':_fr, 'bg_color':_color}
+        _dict = {'comment': _comment, 'fr': _fr, 'bg_color': _color}
         self._draw_data.append(_dict)
         self._draw_timeline_memo()
         self.repaint()
@@ -179,7 +181,9 @@ class AnimMemo(QtWidgets.QWidget):
         )
         painter.drawLine(line)
         '''
-        painter.setBrush(QtGui.QColor(bg_color[0], bg_color[1], bg_color[2], 128))
+        _c = QtGui.QColor(bg_color)
+        _c.setAlpha(128)
+        painter.setBrush(_c)
         _pos, _w = self._get_draw_position_width(fr)
         painter.drawRect(_pos, 10, _w, 10)
 
@@ -204,9 +208,28 @@ class AnimMemo(QtWidgets.QWidget):
 
     def mouseMoveEvent(self, event):
         super(AnimMemo, self).mouseMoveEvent(event)
-        comment = self._get_position_to_comment(event)
-        if comment:
-            QtWidgets.QToolTip.showText(event.globalPos(), comment, self, QtCore.QRect(0, 0, self.width(), 0))
+        comment = self._get_position_to_data(event, 'comment')
+        if len(comment) > 0:
+            QtWidgets.QToolTip.showText(event.globalPos(), '\r\n'.join(comment), self, QtCore.QRect(0, 0, self.width(), 0))
+
+    def mouseDoubleClickEvent(self, event):
+        super(AnimMemo, self).mouseDoubleClickEvent(event)
+
+        if self.change_time_range is True:
+            cmds.playbackOptions(min=self.def_time_range_min, max=self.def_time_range_max)
+            self.change_time_range = False
+            self.def_time_range_min = None
+            self.def_time_range_max = None
+        else:
+            fr = self._get_position_to_data(event, 'fr')
+            if len(fr) == 0:
+                return
+            self.change_time_range = True
+            self.def_time_range_min = cmds.playbackOptions(q=True, min=True)
+            self.def_time_range_max = cmds.playbackOptions(q=True, max=True)
+            cmds.playbackOptions(min=fr[0][0], max=fr[0][1])
+
+
 
     def deleteLater(self):
         #remove callback
@@ -220,30 +243,33 @@ class AnimMemo(QtWidgets.QWidget):
         _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self.delete_all_memo)
         self.callback = [_id1, _id2]
 
-    def _get_position_to_comment(self, event):
-        comment = ''
+    def _get_position_to_data(self, event, key):
+        data = []
         x = event.pos().x()
         for _d in self._draw_data:
             _pos, _w = self._get_draw_position_width(_d['fr'])
             if _pos < x < _pos + _w:
-                if comment != '':
-                    comment += '\r\n'
-                comment += _d['comment']
-        return comment
+                data.append(_d[key])
+        return data
+
 
 class NewMemo(QtWidgets.QDialog):
 
-    def __init__(self, parent):
+    def __init__(self, parent, fr=None, color='#999999'):
         super(NewMemo, self).__init__(parent)
+        self.color = color
 
         self.le = QtWidgets.QTextEdit(self)
         self.fr_start = QtWidgets.QSpinBox(self)
         self.fr_end = QtWidgets.QSpinBox(self)
         self.fr_start.setFixedWidth(80)
         self.fr_end.setFixedWidth(80)
+        if fr is not None:
+            self.fr_start.setValue(fr[0])
+            self.fr_end.setValue(fr[1])
+        self.btn_color = QtWidgets.QPushButton(self)
 
         horizontal_spacer_item = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-
 
         # ダイアログのOK/キャンセルボタンを用意
         btns = QtWidgets.QDialogButtonBox(
@@ -266,6 +292,13 @@ class NewMemo(QtWidgets.QDialog):
         hb.addWidget(self.fr_end)
         vb.addLayout(hb)
 
+        hb = QtWidgets.QHBoxLayout()
+        hb.addWidget(QtWidgets.QLabel("Color", self))
+        hb.addWidget(self.btn_color)
+        vb.addLayout(hb)
+        self.btn_color.clicked.connect(self._select_color)
+        self._set_button_color()
+
         vb.addWidget(btns)
         self.setLayout(vb)
 
@@ -273,17 +306,35 @@ class NewMemo(QtWidgets.QDialog):
         self.setWindowTitle('New Memo')
         self.show()
 
+    def _select_color(self):
+        color = QtWidgets.QColorDialog.getColor(self.color, self)
+        if color.isValid():
+            self.color = color.name()
+            self._set_button_color()
+
+    def _set_button_color(self):
+        palette = QtGui.QPalette()
+        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(self.color))
+        self.btn_color.setPalette(palette)
+
     def get_comment(self):
         return self.le.toPlainText()
 
+    def get_fr(self):
+        return [self.fr_start.value(), self.fr_end.value()]
+
+    def get_color(self):
+        return self.color
+
     @staticmethod
-    def gui(parent=None):
+    def gui(parent=None, fr=None):
         u"""ダイアログを開いてキャンバスサイズとOKキャンセルを返す."""
-        dialog = NewMemo(parent)
+        dialog = NewMemo(parent, fr)
         result = dialog.exec_()  # ダイアログを開く
         comment = dialog.get_comment()
-        print result == QtWidgets.QDialog.Accepted, comment
-        return result == QtWidgets.QDialog.Accepted, comment
+        fr = dialog.get_fr()
+        color = dialog.get_color()
+        return result == QtWidgets.QDialog.Accepted, comment, fr, color
 
 # #################################################################################################
 
