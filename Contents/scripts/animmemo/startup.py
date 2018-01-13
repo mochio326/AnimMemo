@@ -6,4 +6,4 @@ import maya.utils
 from . import memo
 
 def execute():
-    memo.AnimMemo().setup()
+    memo.AnimMemo()
