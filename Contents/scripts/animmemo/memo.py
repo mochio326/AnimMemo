@@ -19,6 +19,24 @@ class AnimMemo(QtWidgets.QWidget):
     VAR = '0.0.1'
     OJB_NAME = 'AnimMemoWidget'
     LAYOUT_NAME = 'AnimMemoLayout'
+    OPTVER_IMPORT_SAMENAME_FILE = 'AnimMemo_Import_SameName_File'
+    EXTENSION = 'animmemo'
+
+    @property
+    def import_samename_file(self):
+        _ex = cmds.optionVar(exists=self.OPTVER_IMPORT_SAMENAME_FILE)
+        if not _ex:
+            return True
+        return cmds.optionVar(q=self.OPTVER_IMPORT_SAMENAME_FILE)
+
+    @import_samename_file.setter
+    def import_samename_file(self, val):
+        cmds.optionVar(iv=[self.OPTVER_IMPORT_SAMENAME_FILE, val])
+
+    @property
+    def samename_file_path(self):
+        _path = cmds.file(q=True, sn=True)
+        return _path.split('.')[0] + '.' + self.EXTENSION
 
     def __init__(self, data=None):
         if data is None:
@@ -32,6 +50,8 @@ class AnimMemo(QtWidgets.QWidget):
         self.change_time_range = False
         self.def_time_range_min = None
         self.def_time_range_max = None
+
+        self.setup()
 
     def setup(self):
         _layout = self._get_layout()
@@ -56,8 +76,10 @@ class AnimMemo(QtWidgets.QWidget):
 
     def add_time_slider_menu(self):
         _original_menu = 'AnimMemoTimeSliderMenu'
+        _option_menu = 'AnimMemoTimeSliderMenu_Option'
+
         if cmds.menuItem(_original_menu, q=True, ex=True):
-            return
+            cmds.deleteUI(_original_menu, mi=True)
 
         if maya_api_version() >= 201100:
             mel.eval('updateTimeSliderMenu TimeSliderMenu')
@@ -65,30 +87,57 @@ class AnimMemo(QtWidgets.QWidget):
         _menu_name = 'TimeSliderMenu'
         cmds.menuItem(divider=True, p=_menu_name)
 
-        cmds.menuItem(_original_menu, subMenu=True, label='AnimMemo Menu', p=_menu_name)
+        _m = cmds.menuItem(_original_menu, subMenu=True, label='AnimMemo Menu', p=_menu_name, to=True)
 
         cmds.menuItem(label='Create',
                       ann='Create Mew Memo',
-                      c=self.new_memo)
+                      c=self.new_memo,
+                      p=_m)
 
         cmds.menuItem(divider=True, p=_original_menu)
 
         cmds.menuItem(label='DeleteAll',
                       ann='Delete All Memo',
-                      c=self.delete_all_memo)
+                      c=self.delete_all_memo,
+                      p=_m)
 
-        cmds.menuItem(divider=True, p=_original_menu)
+        cmds.menuItem(divider=True, p=_m)
 
         cmds.menuItem(label='ExportFile',
                       ann='ExportFile',
-                      c=self.export_data)
+                      c=self.export_data,
+                      p=_m)
 
         cmds.menuItem(label='ImportFile',
                       ann='ImportFile',
-                      c=self.import_data)
+                      c=self.import_data,
+                      p=_m)
+
+        cmds.menuItem(divider=True, p=_m)
+
+        cmds.menuItem(label='ExportFile(Scnes SameName File)',
+                      ann='Export the same name file',
+                      c=self.export_data_samename_file,
+                      p=_m)
+
+        cmds.menuItem(label='ImportFile(Scnes SameName File)',
+                      ann='Import the same name file',
+                      c=self.import_data_samename_file,
+                      p=_m)
+
+        _o = cmds.menuItem(_option_menu, subMenu=True, label='Option', p=_m)
+
+        self.imp_smf = cmds.menuItem(label='Import SameName File',
+                      checkBox=self.import_samename_file,
+                      ann='Import the same name file when opening a scene',
+                      c=self._change_option,
+                      p=_o)
+
+    def _change_option(self, *args):
+        self.import_samename_file = cmds.menuItem(self.imp_smf, q=True, checkBox=True)
 
     def new_memo(self, *args):
-        _result, _comment, _fr, _color = NewMemo.gui(fr=_get_timeline_renge())
+        _result, _comment, _fr, _color = EditMemo.gui(fr=_get_timeline_renge())
         if _result is False:
             return
         _dict = {'comment': _comment, 'fr': _fr, 'bg_color': _color}
@@ -97,23 +146,40 @@ class AnimMemo(QtWidgets.QWidget):
         self.repaint()
 
     def export_data(self, *args):
-        _path = QtWidgets.QFileDialog.getSaveFileName(self, "ExportFile", "Result.animmemo", filter="animmemo (*.animmemo)")
+        _path = QtWidgets.QFileDialog.getSaveFileName(self, 'ExportFile', 'Result.{0}'.format(self.EXTENSION),
+                                                      filter='{0} (*.{0})'.format(self.EXTENSION))
         _path = _path[0]
-        if _path == '':
-            return
-        text = json.dumps(self._draw_data, sort_keys=True, ensure_ascii=False, indent=2)
-        with open(_path, "w") as fh:
-            fh.write(text.encode("utf-8"))
+        self._export_file(_path)
+
+    def export_data_samename_file(self, *args):
+        _path = self.samename_file_path
+        self._export_file(_path)
 
     def import_data(self, *args):
-        _path = QtWidgets.QFileDialog.getOpenFileName(self, "ImportFile", "Result.animmemo", filter="animmemo (*.animmemo)")
+        _path = QtWidgets.QFileDialog.getOpenFileName(self, 'ImportFile', 'Result.{0}'.format(self.EXTENSION),
+                                                      filter='{0} (*.{0})'.format(self.EXTENSION))
         _path = _path[0]
-        if _path == '':
+        self._file_to_import(_path)
+
+    def import_data_samename_file(self, *args):
+        _path = self.samename_file_path
+        self._file_to_import(_path)
+
+    def _file_to_import(self, path):
+        if path == '':
             return
-        with open(_path) as fh:
+        with open(path) as fh:
             self._draw_data = json.loads(fh.read(), "utf-8")
         self._draw_timeline_memo()
         self.repaint()
+
+    def _export_file(self, path):
+        if path == '':
+            return
+        text = json.dumps(self._draw_data, sort_keys=True, ensure_ascii=False, indent=2)
+        with open(path, "w") as fh:
+            fh.write(text.encode("utf-8"))
+
 
     def delete_all_memo(self, *args):
         self._draw_data = []
@@ -229,8 +295,6 @@ class AnimMemo(QtWidgets.QWidget):
             self.def_time_range_max = cmds.playbackOptions(q=True, max=True)
             cmds.playbackOptions(min=fr[0][0], max=fr[0][1])
 
-
-
     def deleteLater(self):
         #remove callback
         for _id in self.callback:
@@ -240,7 +304,7 @@ class AnimMemo(QtWidgets.QWidget):
 
     def add_callback(self):
         _id1 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterNew, self.delete_all_memo)
-        _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self.delete_all_memo)
+        _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self._open_scene_callback)
         self.callback = [_id1, _id2]
 
     def _get_position_to_data(self, event, key):
@@ -252,11 +316,22 @@ class AnimMemo(QtWidgets.QWidget):
                 data.append(_d[key])
         return data
 
+    def _open_scene_callback(self, *args):
+        self.delete_all_memo()
+        if not self.import_samename_file:
+            return
+        _path = self.samename_file_path
+        if _path == '':
+            return
+        with open(_path) as fh:
+            self._draw_data = json.loads(fh.read(), "utf-8")
+        self._draw_timeline_memo()
+        self.repaint()
 
-class NewMemo(QtWidgets.QDialog):
+class EditMemo(QtWidgets.QDialog):
 
     def __init__(self, parent, fr=None, color='#999999'):
-        super(NewMemo, self).__init__(parent)
+        super(EditMemo, self).__init__(parent)
         self.color = color
 
         self.le = QtWidgets.QTextEdit(self)
@@ -329,7 +404,7 @@ class NewMemo(QtWidgets.QDialog):
     @staticmethod
     def gui(parent=None, fr=None):
         u"""ダイアログを開いてキャンバスサイズとOKキャンセルを返す."""
-        dialog = NewMemo(parent, fr)
+        dialog = EditMemo(parent, fr)
         result = dialog.exec_()  # ダイアログを開く
         comment = dialog.get_comment()
         fr = dialog.get_fr()
