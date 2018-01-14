@@ -5,14 +5,18 @@ import maya.mel as mel
 import maya.OpenMayaUI as OpenMayaUI
 import maya.OpenMaya as OpenMaya
 import json
+import os
+
 
 def maya_api_version():
     return int(cmds.about(api=True))
+
 
 if 201700 <= maya_api_version() and maya_api_version() < 201800:
     import shiboken2 as shiboken
 else:
     import shiboken
+
 
 class AnimMemo(QtWidgets.QWidget):
     URL = "https://github.com/mochio326/AnimMemo"
@@ -20,7 +24,9 @@ class AnimMemo(QtWidgets.QWidget):
     OJB_NAME = 'AnimMemoWidget'
     LAYOUT_NAME = 'AnimMemoLayout'
     OPTVER_IMPORT_SAMENAME_FILE = 'AnimMemo_Import_SameName_File'
+    OPTVER_SAVE_TO_CURRENT_SCENE = 'AnimMemo_Save_to_CurrentScene'
     EXTENSION = 'animmemo'
+    FILE_INFO = 'AnimMemoDrawData'
 
     @property
     def import_samename_file(self):
@@ -34,9 +40,28 @@ class AnimMemo(QtWidgets.QWidget):
         cmds.optionVar(iv=[self.OPTVER_IMPORT_SAMENAME_FILE, val])
 
     @property
+    def save_to_current_scene(self):
+        _ex = cmds.optionVar(exists=self.OPTVER_SAVE_TO_CURRENT_SCENE)
+        if not _ex:
+            return False
+        return cmds.optionVar(q=self.OPTVER_SAVE_TO_CURRENT_SCENE)
+
+    @save_to_current_scene.setter
+    def save_to_current_scene(self, val):
+        cmds.optionVar(iv=[self.OPTVER_SAVE_TO_CURRENT_SCENE, val])
+
+    @property
     def samename_file_path(self):
         _path = cmds.file(q=True, sn=True)
+        if _path == '':
+            return ''
         return _path.split('.')[0] + '.' + self.EXTENSION
+
+    @property
+    def draw_data_json_dump(self):
+        text = json.dumps(self._draw_data, sort_keys=True, ensure_ascii=False, indent=2)
+        return text
+
 
     def __init__(self, data=None):
         if data is None:
@@ -133,8 +158,15 @@ class AnimMemo(QtWidgets.QWidget):
                       c=self._change_option,
                       p=_o)
 
+        self.save2scene = cmds.menuItem(label='Save to CurrentScene',
+                      checkBox=self.save_to_current_scene,
+                      ann='Save to CurrentScene',
+                      c=self._change_option,
+                      p=_o)
+
     def _change_option(self, *args):
         self.import_samename_file = cmds.menuItem(self.imp_smf, q=True, checkBox=True)
+        self.save_to_current_scene = cmds.menuItem(self.save2scene, q=True, checkBox=True)
 
     def new_memo(self, *args):
         _result, _comment, _fr, _color = EditMemo.gui(fr=_get_timeline_renge())
@@ -169,17 +201,15 @@ class AnimMemo(QtWidgets.QWidget):
         if path == '':
             return
         with open(path) as fh:
-            self._draw_data = json.loads(fh.read(), "utf-8")
+            self._draw_data = json.loads(fh.read(), 'utf-8')
         self._draw_timeline_memo()
         self.repaint()
 
     def _export_file(self, path):
         if path == '':
             return
-        text = json.dumps(self._draw_data, sort_keys=True, ensure_ascii=False, indent=2)
         with open(path, "w") as fh:
-            fh.write(text.encode("utf-8"))
-
+            fh.write(self.draw_data_json_dump.encode('utf-8'))
 
     def delete_all_memo(self, *args):
         self._draw_data = []
@@ -224,7 +254,13 @@ class AnimMemo(QtWidgets.QWidget):
 
     def _draw_timeline_memo(self):
         for d in self._draw_data:
-            self._draw_single( d['fr'], d['bg_color'])
+            self._draw_single(d['fr'], d['bg_color'])
+
+    def _save_draw_data(self, *args):
+        if self.save_to_current_scene:
+            cmds.fileInfo(self.FILE_INFO, self.draw_data_json_dump)
+        else:
+            cmds.fileInfo(rm=self.FILE_INFO)
 
     def _draw_single(self, fr, bg_color):
         opt = QtWidgets.QStyleOption()
@@ -257,7 +293,7 @@ class AnimMemo(QtWidgets.QWidget):
         pen = QtGui.QPen(color, 28)
         painter.setPen(pen)
 
-        _p = QtCore.QPoint(110, 15)
+        _p = QtCore.QPoint(_pos, 15)
         #painter.drawText(_p, 'hogehoge')
 
     def _get_draw_position_width(self, fr):
@@ -282,11 +318,13 @@ class AnimMemo(QtWidgets.QWidget):
         super(AnimMemo, self).mouseDoubleClickEvent(event)
 
         if self.change_time_range is True:
+            #フレーム範囲を元に戻す
             cmds.playbackOptions(min=self.def_time_range_min, max=self.def_time_range_max)
             self.change_time_range = False
             self.def_time_range_min = None
             self.def_time_range_max = None
         else:
+            #フレーム範囲をメモ範囲に合わせる
             fr = self._get_position_to_data(event, 'fr')
             if len(fr) == 0:
                 return
@@ -305,7 +343,9 @@ class AnimMemo(QtWidgets.QWidget):
     def add_callback(self):
         _id1 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterNew, self.delete_all_memo)
         _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self._open_scene_callback)
-        self.callback = [_id1, _id2]
+        _id3 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kBeforeSave, self._save_draw_data)
+
+        self.callback = [_id1, _id2, _id3]
 
     def _get_position_to_data(self, event, key):
         data = []
@@ -318,15 +358,30 @@ class AnimMemo(QtWidgets.QWidget):
 
     def _open_scene_callback(self, *args):
         self.delete_all_memo()
-        if not self.import_samename_file:
+        _data = None
+
+        _finfo = cmds.fileInfo(self.FILE_INFO, q=True)
+        if _finfo:
+            print _finfo[0]
+            _data = _finfo[0].replace('\\"', '"')
+            _data = _data.replace('\\n', '').strip()
+            self._draw_data = json.loads(_data)
+
+        if self.import_samename_file:
+            _path = self.samename_file_path
+            if os.path.isfile(_path):
+                with open(_path) as fh:
+                    self._draw_data = json.loads(fh.read(), 'utf-8')
+
+        if _data is None:
             return
-        _path = self.samename_file_path
-        if _path == '':
-            return
-        with open(_path) as fh:
-            self._draw_data = json.loads(fh.read(), "utf-8")
+
+        print _data
+
+        self._draw_data = json.loads(_data, 'utf-8')
         self._draw_timeline_memo()
         self.repaint()
+
 
 class EditMemo(QtWidgets.QDialog):
 
