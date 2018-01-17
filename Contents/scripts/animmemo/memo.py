@@ -62,7 +62,6 @@ class AnimMemo(QtWidgets.QWidget):
         text = json.dumps(self._draw_data, sort_keys=True, ensure_ascii=False, indent=2)
         return text
 
-
     def __init__(self, data=None):
         if data is None:
             self._draw_data = []
@@ -253,8 +252,35 @@ class AnimMemo(QtWidgets.QWidget):
         self._draw_timeline_memo()
 
     def _draw_timeline_memo(self):
+        lines = []
         for d in self._draw_data:
-            self._draw_single(d['fr'], d['bg_color'])
+            _dfr = d['fr']
+            _append = False
+            for line in lines:
+                _overlap = False
+                for l in line:
+                    _lfr = l['fr']
+                    # 既存のデータのフレーム範囲に追加分のフレームが被っている
+                    if _lfr[0] <= _dfr[0] <= _lfr[1] or _lfr[0] <= _dfr[1] <= _lfr[1]:
+                        _overlap = True
+                        break
+                    # 追加分のフレーム範囲が既存のデータをすっぽり包んでいる
+                    if _dfr[0] <= _lfr[0] <= _dfr[1] and _dfr[0] <= _lfr[1] <= _dfr[1]:
+                        _overlap = True
+                        break
+
+                if not _overlap:
+                    line.append(d)
+                    _append = True
+                    break
+
+            # 新しい行追加
+            if not _append:
+                lines.append([d])
+
+        for i, line in enumerate(lines):
+            for l in line:
+                self._draw_single(l['fr'], l['bg_color'], i, len(lines))
 
     def _save_draw_data(self, *args):
         if self.save_to_current_scene:
@@ -262,7 +288,10 @@ class AnimMemo(QtWidgets.QWidget):
         else:
             cmds.fileInfo(rm=self.FILE_INFO)
 
-    def _draw_single(self, fr, bg_color):
+    def _draw_single(self, fr, bg_color, line_number, line_count):
+        _timeline_height = 26
+        _single_height = _timeline_height / line_count
+
         opt = QtWidgets.QStyleOption()
         opt.initFrom(self)
         p = QtGui.QPainter(self)
@@ -287,7 +316,9 @@ class AnimMemo(QtWidgets.QWidget):
         _c.setAlpha(128)
         painter.setBrush(_c)
         _pos, _w = self._get_draw_position_width(fr)
-        painter.drawRect(_pos, 10, _w, 10)
+        _h = (_single_height + 1) * line_number
+
+        painter.drawRect(_pos, _h, _w, _single_height)
 
         color = QtGui.QColor('#000000')
         pen = QtGui.QPen(color, 28)
