@@ -16,7 +16,6 @@ class MemoBase(QtWidgets.QWidget):
             self._draw_data = []
         else:
             self._draw_data = data
-
         self.parent = parent
         super(MemoBase, self).__init__(self.parent)
         self.setup()
@@ -44,15 +43,15 @@ class MemoBase(QtWidgets.QWidget):
                 _c.deleteLater()
 
 
-class AnimCurveEditorMemo(MemoBase):
-    OJB_NAME = 'AnimMemoWidgetaaaaaa'
-    LAYOUT_NAME = 'AnimMemoLayoutaaaaaaaa'
+class CurveEditorMemo(MemoBase):
+    OJB_NAME = 'CurveEditorMemoWidget'
+    LAYOUT_NAME = 'CurveEditorMemoLayout'
 
     def __init__(self, data=None):
         _p = _lib.get_anim_curve_editor_wiget()
         if _p is None:
             return
-        super(AnimCurveEditorMemo, self).__init__(_p, data)
+        super(CurveEditorMemo, self).__init__(_p, data)
 
     def paintEvent(self, event):
         self._draw_timeline_memo()
@@ -144,18 +143,9 @@ class AnimMemo(MemoBase):
         self.def_time_range_max = None
 
         self.setMouseTracking(True)
-        cmds.scriptJob(event=['timeChanged', self._view_message])
-        cmds.scriptJob(cc=['playingBack', self._view_message])
-
+        self._add_script_jobs()
         menu.TimeSliderMenu(self)
-        self.add_callback()
-
-    def _delete_script_job(self):
-        jobs = cmds.scriptJob(listJobs=True)
-        for _j in jobs:
-            if 'AnimMemo._view_message' in _j:
-                job_num = _j.split(':')[0]
-                cmds.scriptJob(kill=int(job_num), force=True)
+        self._add_callback()
 
     def new_memo(self, *args):
         _result, _comment, _fr, _color = edit.EditMemoDialog.gui(fr=_lib.get_timeline_renge())
@@ -165,40 +155,6 @@ class AnimMemo(MemoBase):
         self._draw_data.append(_dict)
         self._draw_timeline_memo()
         self.repaint()
-
-    def export_data(self, *args):
-        _path = QtWidgets.QFileDialog.getSaveFileName(self, 'ExportFile', 'Result.{0}'.format(self.EXTENSION),
-                                                      filter='{0} (*.{0})'.format(self.EXTENSION))
-        _path = _path[0]
-        self._export_file(_path)
-
-    def export_data_samename_file(self, *args):
-        _path = self.samename_file_path
-        self._export_file(_path)
-
-    def import_data(self, *args):
-        _path = QtWidgets.QFileDialog.getOpenFileName(self, 'ImportFile', 'Result.{0}'.format(self.EXTENSION),
-                                                      filter='{0} (*.{0})'.format(self.EXTENSION))
-        _path = _path[0]
-        self._file_to_import(_path)
-
-    def import_data_samename_file(self, *args):
-        _path = self.samename_file_path
-        self._file_to_import(_path)
-
-    def _file_to_import(self, path):
-        if path == '':
-            return
-        with open(path) as fh:
-            self._draw_data = json.loads(fh.read(), 'utf-8')
-        self._draw_timeline_memo()
-        self.repaint()
-
-    def _export_file(self, path):
-        if path == '':
-            return
-        with open(path, "w") as fh:
-            fh.write(self.draw_data_json_dump.encode('utf-8'))
 
     def delete_all_memo(self, *args):
         self._draw_data = []
@@ -213,28 +169,18 @@ class AnimMemo(MemoBase):
             if _fr[0] <= _t <= _fr[1]:
                 if comment != '':
                     comment += '\r\n'
-                comment += _d['comment']
+                #format文だとなぜか上手くいかなかった <br>で改行しようとしたら枠からずれた…
+                comment += '<font color="'+_d['bg_color']+'">'+_d['comment']+'</font>'
         if comment != '':
             cmds.inViewMessage(amg=comment, pos='midCenter', fade=True)
         else:
             cmds.inViewMessage(clear='midCenter')
-
-    def paintEvent(self, event):
-        super(AnimMemo, self).paintEvent(event)
-        AnimCurveEditorMemo(self._draw_data)
-        self._draw_timeline_memo()
 
     def _draw_timeline_memo(self):
         lines = _lib.draw_data_to_multi_line_data(self._draw_data)
         for i, line in enumerate(lines):
             for l in line:
                 self._draw_single(l['fr'], l['bg_color'], i, len(lines))
-
-    def _save_draw_data(self, *args):
-        if menu.TimeSliderMenu.save_to_current_scene:
-            cmds.fileInfo(self.FILE_INFO, self.draw_data_json_dump)
-        else:
-            cmds.fileInfo(rm=self.FILE_INFO)
 
     def _draw_single(self, fr, bg_color, line_number, line_count):
         _timeline_height = 26
@@ -287,6 +233,50 @@ class AnimMemo(MemoBase):
         width = frame_width * (fr[1] - fr[0] + 1)
         return position, width
 
+    def _get_position_to_data(self, event, key):
+        # マウスの位置からアクティブなメモを取得
+        data = []
+        x = event.pos().x()
+        for _d in self._draw_data:
+            _pos, _w = self._get_draw_position_width(_d['fr'])
+            if _pos < x < _pos + _w:
+                data.append(_d[key])
+        return data
+
+    # -----------------------
+    # DataSaveLoad
+    # -----------------------
+    def export_data_samename_file(self, *args):
+        _path = self.samename_file_path
+        self.export_file(_path)
+
+    def import_data_samename_file(self, *args):
+        _path = self.samename_file_path
+        self.file_to_import(_path)
+
+    def file_to_import(self, path):
+        if path == '':
+            return
+        with open(path) as fh:
+            self._draw_data = json.loads(fh.read(), 'utf-8')
+        self._draw_timeline_memo()
+        self.repaint()
+
+    def export_file(self, path):
+        if path == '':
+            return
+        with open(path, "w") as fh:
+            fh.write(self.draw_data_json_dump.encode('utf-8'))
+
+    def _save_draw_data_to_current_scene(self, *args):
+        if menu.TimeSliderMenu.save_to_current_scene:
+            cmds.fileInfo(self.FILE_INFO, self.draw_data_json_dump)
+        else:
+            cmds.fileInfo(rm=self.FILE_INFO)
+
+    # -----------------------
+    # QtFunctionOverride
+    # -----------------------
     def mouseMoveEvent(self, event):
         super(AnimMemo, self).mouseMoveEvent(event)
         comment = self._get_position_to_data(event, 'comment')
@@ -316,36 +306,46 @@ class AnimMemo(MemoBase):
         #remove callback
         for _id in self.callback:
             OpenMaya.MMessage.removeCallback(_id)
-        self._delete_script_job()
+        self._delete_script_jobs()
         QtWidgets.QWidget.deleteLater(self)
 
-    def add_callback(self):
+    def paintEvent(self, event):
+        super(AnimMemo, self).paintEvent(event)
+        CurveEditorMemo(self._draw_data)
+        self._draw_timeline_memo()
+
+    # -----------------------
+    # Callback ScriptJobs
+    # -----------------------
+    def _add_script_jobs(self):
+        cmds.scriptJob(event=['timeChanged', self._view_message])
+        cmds.scriptJob(cc=['playingBack', self._view_message])
+        
+    def _delete_script_jobs(self):
+        jobs = cmds.scriptJob(listJobs=True)
+        for _j in jobs:
+            if 'AnimMemo._view_message' in _j:
+                job_num = _j.split(':')[0]
+                cmds.scriptJob(kill=int(job_num), force=True)
+
+    def _add_callback(self):
         _id1 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterNew, self.delete_all_memo)
         _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self._open_scene_callback)
-        _id3 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kBeforeSave, self._save_draw_data)
-
+        _id3 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kBeforeSave, self._save_draw_data_to_current_scene)
         self.callback = [_id1, _id2, _id3]
-
-    def _get_position_to_data(self, event, key):
-        data = []
-        x = event.pos().x()
-        for _d in self._draw_data:
-            _pos, _w = self._get_draw_position_width(_d['fr'])
-            if _pos < x < _pos + _w:
-                data.append(_d[key])
-        return data
 
     def _open_scene_callback(self, *args):
         self.delete_all_memo()
         _data = None
 
+        # シーン内に保持されているデータの読み込み
         _finfo = cmds.fileInfo(self.FILE_INFO, q=True)
         if _finfo:
             print _finfo[0]
             _data = _finfo[0].replace('\\"', '"')
             _data = _data.replace('\\n', '').strip()
             self._draw_data = json.loads(_data)
-
+        # シーン同名ファイル読み込み
         if menu.TimeSliderMenu.import_samename_file:
             _path = self.samename_file_path
             if os.path.isfile(_path):
@@ -354,9 +354,6 @@ class AnimMemo(MemoBase):
 
         if _data is None:
             return
-
-        print _data
-
         self._draw_data = json.loads(_data, 'utf-8')
         self._draw_timeline_memo()
         self.repaint()
