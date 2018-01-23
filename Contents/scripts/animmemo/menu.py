@@ -42,6 +42,11 @@ class TimeSliderMenu(object):
                       c=self.memo_cls.new_memo,
                       p=_m)
 
+        cmds.menuItem(label='Edit',
+                      ann='Edit Mew Memo',
+                      c=self.memo_cls.edit_memo,
+                      p=_m)
+
         cmds.menuItem(divider=True, p=_original_menu)
 
         cmds.menuItem(label='DeleteAll',
