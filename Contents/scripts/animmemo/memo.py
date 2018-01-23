@@ -63,8 +63,8 @@ class CurveEditorMemo(MemoBase):
                 self._draw_single(l['fr'], l['bg_color'], i, len(lines))
 
     def _draw_single(self, fr, bg_color, line_number, line_count):
-        _timeline_height = 26
-        _single_height = _timeline_height / line_count
+        self.TIMELINE_HEIGHT = 26
+        _single_height = self.TIMELINE_HEIGHT / line_count
 
         opt = QtWidgets.QStyleOption()
         opt.initFrom(self)
@@ -121,6 +121,7 @@ class AnimMemo(MemoBase):
     LAYOUT_NAME = 'AnimMemoLayout'
     EXTENSION = 'animmemo'
     FILE_INFO = 'AnimMemoDrawData'
+    TIMELINE_HEIGHT = 26
 
     @property
     def samename_file_path(self):
@@ -148,7 +149,20 @@ class AnimMemo(MemoBase):
         self._add_callback()
 
     def new_memo(self, *args):
-        _result, _comment, _fr, _color = edit.EditMemoDialog.gui(fr=_lib.get_timeline_renge())
+        _result, _comment, _fr, _color = edit.EditMemoDialog.gui(
+            _lib.get_timeline_wiget(), fr=_lib.get_timeline_renge(), mode='New')
+        if _result is False:
+            return
+        _dict = {'comment': _comment, 'fr': _fr, 'bg_color': _color}
+        self._draw_data.append(_dict)
+        self._draw_timeline_memo()
+        self.repaint()
+
+    def edit_memo(self, *args):
+        if self._draw_data == []:
+            return
+        _result, _comment, _fr, _color = edit.EditMemoDialog.gui(
+            _lib.get_timeline_wiget(), draw_data=self._draw_data, mode='Edit')
         if _result is False:
             return
         _dict = {'comment': _comment, 'fr': _fr, 'bg_color': _color}
@@ -178,13 +192,13 @@ class AnimMemo(MemoBase):
 
     def _draw_timeline_memo(self):
         lines = _lib.draw_data_to_multi_line_data(self._draw_data)
+        self.draw_line_count = len(lines)
         for i, line in enumerate(lines):
             for l in line:
-                self._draw_single(l['fr'], l['bg_color'], i, len(lines))
+                self._draw_single(l['fr'], l['bg_color'], i)
 
-    def _draw_single(self, fr, bg_color, line_number, line_count):
-        _timeline_height = 26
-        _single_height = _timeline_height / line_count
+    def _draw_single(self, fr, bg_color, line_number):
+        _single_height = self.TIMELINE_HEIGHT / self.draw_line_count
 
         opt = QtWidgets.QStyleOption()
         opt.initFrom(self)
