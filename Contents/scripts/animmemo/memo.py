@@ -149,8 +149,8 @@ class AnimMemo(MemoBase):
         self._add_callback()
 
     def new_memo(self, *args):
-        _result, _comment, _fr, _color = edit.EditMemoDialog.gui(
-            _lib.get_timeline_wiget(), fr=_lib.get_timeline_renge(), mode='New')
+        _result, _comment, _fr, _color = edit.NewMemoDialog.gui(
+            _lib.get_timeline_wiget(), fr=_lib.get_timeline_renge())
         if _result is False:
             return
         _dict = {'comment': _comment, 'fr': _fr, 'bg_color': _color}
@@ -161,12 +161,11 @@ class AnimMemo(MemoBase):
     def edit_memo(self, *args):
         if self._draw_data == []:
             return
-        _result, _comment, _fr, _color = edit.EditMemoDialog.gui(
-            _lib.get_timeline_wiget(), draw_data=self._draw_data, mode='Edit')
+        _result, _draw_data = edit.EditMemoDialog.gui(
+            _lib.get_timeline_wiget(), draw_data=self._draw_data)
         if _result is False:
             return
-        _dict = {'comment': _comment, 'fr': _fr, 'bg_color': _color}
-        self._draw_data.append(_dict)
+        self._draw_data = _draw_data
         self._draw_timeline_memo()
         self.repaint()
 
