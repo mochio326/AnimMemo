@@ -324,7 +324,7 @@ class AnimMemo(MemoBase):
 
     def paintEvent(self, event):
         super(AnimMemo, self).paintEvent(event)
-        CurveEditorMemo(self._draw_data)
+        #CurveEditorMemo(self._draw_data)
         self._draw_timeline_memo()
 
     # -----------------------
