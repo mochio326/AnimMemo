@@ -121,7 +121,7 @@ class EditMemoDialog(MemoDialogBase):
         self.memo_list_view.setModel(self.memo_list_model)
 
         memo_list_sel_model = self.memo_list_view.selectionModel()
-        memo_list_sel_model.selectionChanged.connect(self._memo_list_changed)
+        memo_list_sel_model.selectionChanged.connect(self.memo_list_changed)
 
     def _layout(self):
         vb = self._edit_layout()
@@ -155,7 +155,7 @@ class EditMemoDialog(MemoDialogBase):
         vb0.addWidget(btns)
         self.setLayout(vb0)
 
-    def _memo_list_changed(self, selected, deselected):
+    def memo_list_changed(self, selected, deselected):
         if len(deselected) != 0:
             _deselected_idx = deselected[0].indexes()[0].row()
             _selected_idx = selected[0].indexes()[0].row()
@@ -194,6 +194,12 @@ class EditMemoDialog(MemoDialogBase):
         u"""ダイアログを開いてキャンバスサイズとOKキャンセルを返す."""
         dialog = EditMemoDialog(parent=parent, draw_data=draw_data)
         result = dialog.exec_()  # ダイアログを開く
+        _list_idx = dialog.memo_list_view.currentIndex()
+        _d = {}
+        _d['comment'] = dialog.get_comment()
+        _d['fr'] = dialog.get_fr()
+        _d['bg_color'] = dialog.get_color()
+        dialog.draw_data[_list_idx.row()] = _d
         return result == QtWidgets.QDialog.Accepted, dialog.draw_data
 
 #-----------------------------------------------------------------------------
