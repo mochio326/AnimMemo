@@ -117,7 +117,7 @@ class EditMemoDialog(MemoDialogBase):
         self.memo_list_view.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.memo_list_view.setAlternatingRowColors(True)
         self.memo_list_model = QtGui.QStandardItemModel()
-        self.memo_list_model.setHorizontalHeaderLabels(['frame', 'color', 'comment'])
+        self.memo_list_model.setHorizontalHeaderLabels(['', 'frame', 'color', 'comment'])
         self.memo_list_view.setModel(self.memo_list_model)
 
         memo_list_sel_model = self.memo_list_view.selectionModel()
@@ -170,6 +170,7 @@ class EditMemoDialog(MemoDialogBase):
             self.memo_list_view.setCurrentIndex(self.memo_list_model.index(_selected_idx, 0))
         self._apply_select_memo_data()
 
+
     def _apply_select_memo_data(self):
 
         _list_idx = self.memo_list_view.currentIndex()
@@ -179,14 +180,24 @@ class EditMemoDialog(MemoDialogBase):
         self.fr_start.setValue(_d['fr'][0])
         self.fr_end.setValue(_d['fr'][1])
         self.color = _d['bg_color']
+
+        self.setStyleSheet(
+            "QTreeView::item:selected {"
+            "border-bottom:1px solid "+_d['bg_color']+";"
+            "border-top:1px solid "+_d['bg_color']+";"
+            "}"
+        )
         self._set_button_color()
 
     def set_list_item(self):
         index = 0
         for _d in self.draw_data:
-            self.memo_list_model.setItem(index, 0, QtGui.QStandardItem(str(_d['fr'][0]) + u'～' + str(_d['fr'][1]) + '  '))
-            self.memo_list_model.setItem(index, 1, QtGui.QStandardItem(_d['bg_color']))
-            self.memo_list_model.setItem(index, 2, QtGui.QStandardItem(_d['comment']))
+            _color_text = QtGui.QStandardItem(u'■')
+            self.memo_list_model.setItem(index, 0, _color_text)
+            _color_text.setForeground(QtGui.QColor(_d['bg_color']))
+            self.memo_list_model.setItem(index, 1, QtGui.QStandardItem(str(_d['fr'][0]) + u'～' + str(_d['fr'][1]) + '  '))
+            self.memo_list_model.setItem(index, 2, QtGui.QStandardItem(_d['bg_color']))
+            self.memo_list_model.setItem(index, 3, QtGui.QStandardItem(_d['comment']))
             index += 1
 
     @staticmethod
