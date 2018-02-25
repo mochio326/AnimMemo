@@ -19,6 +19,9 @@ class MemoBase(QtWidgets.QWidget):
         self.parent = parent
         super(MemoBase, self).__init__(self.parent)
         self.setup()
+        #2017以降だとこれを行わないと表示されなかった
+        self.setFixedWidth(self.parent.width())
+        self.show()
 
     def setup(self):
         _layout = self._get_layout()
@@ -324,7 +327,7 @@ class AnimMemo(MemoBase):
 
     def paintEvent(self, event):
         super(AnimMemo, self).paintEvent(event)
-        #CurveEditorMemo(self._draw_data)
+        CurveEditorMemo(self._draw_data)
         self._draw_timeline_memo()
 
     # -----------------------

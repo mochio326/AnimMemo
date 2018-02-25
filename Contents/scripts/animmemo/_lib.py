@@ -7,11 +7,13 @@ import maya.OpenMaya as OpenMaya
 import json
 import os
 
+def maya_version():
+    return int(cmds.about(v=True)[:4])
 
 def maya_api_version():
     return int(cmds.about(api=True))
 
-if 201700 <= maya_api_version() and maya_api_version() < 201800:
+if 2017 <= maya_version():
     import shiboken2 as shiboken
 else:
     import shiboken
