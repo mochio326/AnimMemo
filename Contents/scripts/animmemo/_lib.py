@@ -40,7 +40,7 @@ def get_anim_curve_editor_wiget():
     if _c is None:
         return None
     w = shiboken.wrapInstance(long(_c), QtWidgets.QWidget)
-    return w
+    return w.children()[1]
 
 
 def get_timeline_highlight_range():
