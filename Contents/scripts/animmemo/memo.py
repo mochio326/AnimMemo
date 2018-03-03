@@ -4,7 +4,9 @@ from . import _lib
 from . import edit
 from . import menu
 import maya.cmds as cmds
-import maya.OpenMaya as OpenMaya
+import maya.OpenMaya as om
+import maya.OpenMayaUI as omu
+
 import json
 import os
 
@@ -20,8 +22,7 @@ class MemoBase(QtWidgets.QWidget):
         super(MemoBase, self).__init__(self.parent)
         self.setup()
         #2017以降だとこれを行わないと表示されなかった
-        self.setFixedWidth(self.parent.width())
-        self.show()
+        #self.setFixedWidth(self.parent.width())
 
     def setup(self):
         _layout = self._get_layout()
@@ -36,6 +37,7 @@ class MemoBase(QtWidgets.QWidget):
         #make new layout
         _layout = QtWidgets.QHBoxLayout(self.parent)
         _layout.setContentsMargins(0, 0, 0, 0)
+
         self.parent.setLayout(_layout)
         _layout.setObjectName(self.LAYOUT_NAME)
         return _layout
@@ -46,18 +48,34 @@ class MemoBase(QtWidgets.QWidget):
                 _c.deleteLater()
 
 
-class CurveEditorMemo(MemoBase):
-    OJB_NAME = 'CurveEditorMemoWidget'
-    LAYOUT_NAME = 'CurveEditorMemoLayout'
+class GraphEditorMemo(MemoBase):
+    OJB_NAME = 'GraphEditorMemoWidget'
+    LAYOUT_NAME = 'GraphEditorMemoLayout'
 
     def __init__(self, data=None):
         _p = _lib.get_anim_curve_editor_wiget()
         if _p is None:
             return
-        super(CurveEditorMemo, self).__init__(_p, data)
+        super(GraphEditorMemo, self).__init__(_p, data)
+        self.callback = []
+        self._add_callback()
+
+        #透過処理してみる…
+        #palette = QtGui.QPalette()
+        #palette.setColor(QtGui.QPalette.Background, QtGui.QColor(255, 255, 255, 0))
+        #self.setPalette(palette)
+        self.setAutoFillBackground(True)
+
+        #self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
+        #self.setStyleSheet("QWidget { background-color: transparent }");
+        self.show()
+
 
     def paintEvent(self, event):
+        super(GraphEditorMemo, self).paintEvent(event)
+        print 'paintEvent!!!!!!'
         self._draw_timeline_memo()
+
 
     def _draw_timeline_memo(self):
         lines = _lib.draw_data_to_multi_line_data(self._draw_data)
@@ -79,42 +97,70 @@ class CurveEditorMemo(MemoBase):
         color = QtGui.QColor(255, 255, 255, 128)
         pen = QtGui.QPen(color)
         painter.setPen(pen)
-        '''
-        font = QtGui.QFont()
-        font.setPointSize(10)
-        painter.setFont(font)
-        line = QtCore.QLine(
-            QtCore.QPoint(frame_width * (fr - 1), 0),
-            QtCore.QPoint(frame_width * fr, 28)
-        )
-        painter.drawLine(line)
-        '''
+
+        #font = QtGui.QFont()
+        #font.setPointSize(10)
+        #painter.setFont(font)
+
+
         _c = QtGui.QColor(bg_color)
-        _c.setAlpha(128)
+        #_c.setAlpha(128)
         painter.setBrush(_c)
         _pos, _w = self._get_draw_position_width(fr)
         _h = (_single_height + 1) * line_number
 
+        self.setMask(QtGui.QRegion(QtCore.QRect(_pos, _h + 50, _w, _single_height), QtGui.QRegion.Rectangle))
         painter.drawRect(_pos, _h + 50, _w, _single_height)
+        #print _pos, _h + 50, _w, _single_height
 
+        '''
         color = QtGui.QColor('#000000')
         pen = QtGui.QPen(color, 28)
         painter.setPen(pen)
 
         _p = QtCore.QPoint(_pos, 15)
         #painter.drawText(_p, 'hogehoge')
+        '''
 
     def _get_draw_position_width(self, fr):
         #幅から引くと何故かちょうど良くなるピクセル数
-        _width_offset_px = 10
-        _start = cmds.playbackOptions(q=True, min=True)
-        _end = cmds.playbackOptions(q=True, max=True)
-        _total = _end - _start + 1
+        _width_offset_px = 0
+        frame_left, frame_right, value_buttom, value_top = self._get_print_viewport_bounds()
+        _total = frame_right - frame_left
         #１フレーム分の幅
         frame_width = (self.width() - _width_offset_px) / _total
-        position = frame_width * (fr[0] - _start) + 6
+        position = frame_width * (fr[0] - frame_left)
         width = frame_width * (fr[1] - fr[0] + 1)
         return position, width
+
+    def _get_print_viewport_bounds(self):
+        info = omu.MGraphEditorInfo()
+        leftSu = om.MScriptUtil(0.0)
+        leftPtr = leftSu.asDoublePtr()
+        rightSu = om.MScriptUtil(0.0)
+        rightPtr = rightSu.asDoublePtr()
+        bottomSu = om.MScriptUtil(0.0)
+        bottomPtr = bottomSu.asDoublePtr()
+        topSu = om.MScriptUtil(0.0)
+        topPtr = topSu.asDoublePtr()
+        info.getViewportBounds(leftPtr, rightPtr, bottomPtr, topPtr)
+        frame_left = om.MScriptUtil(leftPtr).asDouble()
+        frame_right = om.MScriptUtil(rightPtr).asDouble()
+        value_buttom = om.MScriptUtil(bottomPtr).asDouble()
+        value_top =om.MScriptUtil(topPtr).asDouble()
+
+        return frame_left, frame_right, value_buttom, value_top
+
+
+    def _add_callback(self):
+        _id1 = om.MEventMessage.addEventCallback('graphEditorChanged', self.paintEvent)
+        self.callback = [_id1]
+
+    def deleteLater(self):
+        #remove callback
+        for _id in self.callback:
+            om.MMessage.removeCallback(_id)
+        QtWidgets.QWidget.deleteLater(self)
 
 
 class AnimMemo(MemoBase):
@@ -150,6 +196,7 @@ class AnimMemo(MemoBase):
         self._add_script_jobs()
         menu.TimeSliderMenu(self)
         self._add_callback()
+        self.show()
 
     def new_memo(self, *args):
         _result, _comment, _fr, _color = edit.NewMemoDialog.gui(
@@ -321,13 +368,13 @@ class AnimMemo(MemoBase):
     def deleteLater(self):
         #remove callback
         for _id in self.callback:
-            OpenMaya.MMessage.removeCallback(_id)
+            om.MMessage.removeCallback(_id)
         self._delete_script_jobs()
         QtWidgets.QWidget.deleteLater(self)
 
     def paintEvent(self, event):
         super(AnimMemo, self).paintEvent(event)
-        CurveEditorMemo(self._draw_data)
+        #GraphEditorMemo(self._draw_data)
         self._draw_timeline_memo()
 
     # -----------------------
@@ -345,9 +392,9 @@ class AnimMemo(MemoBase):
                 cmds.scriptJob(kill=int(job_num), force=True)
 
     def _add_callback(self):
-        _id1 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterNew, self.delete_all_memo)
-        _id2 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterOpen, self._open_scene_callback)
-        _id3 = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kBeforeSave, self._save_draw_data_to_current_scene)
+        _id1 = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterNew, self.delete_all_memo)
+        _id2 = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, self._open_scene_callback)
+        _id3 = om.MSceneMessage.addCallback(om.MSceneMessage.kBeforeSave, self._save_draw_data_to_current_scene)
         self.callback = [_id1, _id2, _id3]
 
     def _open_scene_callback(self, *args):
