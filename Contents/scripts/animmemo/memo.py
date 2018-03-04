@@ -78,10 +78,18 @@ class GraphEditorMemo(MemoBase):
 
 
     def _draw_timeline_memo(self):
+
+        self.mask_path = QtGui.QPainterPath()
+        #path.addRoundedRect(self.rect(), 3, 3)
+
         lines = _lib.draw_data_to_multi_line_data(self._draw_data)
         for i, line in enumerate(lines):
             for l in line:
                 self._draw_single(l['fr'], l['bg_color'], i, len(lines))
+
+        region = QtGui.QRegion(self.mask_path.toFillPolygon().toPolygon())
+        self.setMask(region)
+
 
     def _draw_single(self, fr, bg_color, line_number, line_count):
         self.TIMELINE_HEIGHT = 26
@@ -109,9 +117,9 @@ class GraphEditorMemo(MemoBase):
         _pos, _w = self._get_draw_position_width(fr)
         _h = (_single_height + 1) * line_number
 
-        self.setMask(QtGui.QRegion(QtCore.QRect(_pos, _h + 50, _w, _single_height), QtGui.QRegion.Rectangle))
+        #self.setMask(QtGui.QRegion(QtCore.QRect(_pos, _h + 50, _w, _single_height), QtGui.QRegion.Rectangle))
         painter.drawRect(_pos, _h + 50, _w, _single_height)
-        #print _pos, _h + 50, _w, _single_height
+        self.mask_path.addRect(_pos, _h + 50, _w, _single_height)
 
         '''
         color = QtGui.QColor('#000000')
