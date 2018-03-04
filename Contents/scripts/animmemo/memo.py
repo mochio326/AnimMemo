@@ -54,15 +54,13 @@ class GraphEditorMemo(MemoBase):
         _p = _lib.get_anim_curve_editor_wiget()
         if _p is None:
             return
-        print _p
-        return
         super(GraphEditorMemo, self).__init__(_p, data)
         self.callback = []
         self._add_callback()
 
         #透過処理してみる…
         #palette = QtGui.QPalette()
-        #palette.setColor(QtGui.QPalette.Background, QtGui.QColor(255, 255, 255, 0))
+        #palette.setColor(QtGui.QPalette.Background, QtGui.QColor(255, 255, 255, 128))
         #self.setPalette(palette)
         self.setAutoFillBackground(True)
 
@@ -112,14 +110,14 @@ class GraphEditorMemo(MemoBase):
 
 
         _c = QtGui.QColor(bg_color)
-        #_c.setAlpha(128)
+        _c.setAlpha(128)
         painter.setBrush(_c)
         _pos, _w = self._get_draw_position_width(fr)
         _h = (_single_height + 1) * line_number
 
         #self.setMask(QtGui.QRegion(QtCore.QRect(_pos, _h + 50, _w, _single_height), QtGui.QRegion.Rectangle))
-        painter.drawRect(_pos, _h + 50, _w, _single_height)
-        self.mask_path.addRect(_pos, _h + 50, _w, _single_height)
+        painter.drawRect(_pos, _h + 30, _w, _single_height)
+        self.mask_path.addRect(_pos, _h + 30, _w, _single_height)
 
         '''
         color = QtGui.QColor('#000000')
