@@ -21,8 +21,6 @@ class MemoBase(QtWidgets.QWidget):
         self.parent = parent
         super(MemoBase, self).__init__(self.parent)
         self.setup()
-        #2017以降だとこれを行わないと表示されなかった
-        #self.setFixedWidth(self.parent.width())
 
     def setup(self):
         _layout = self._get_layout()
@@ -56,6 +54,8 @@ class GraphEditorMemo(MemoBase):
         _p = _lib.get_anim_curve_editor_wiget()
         if _p is None:
             return
+        print _p
+        return
         super(GraphEditorMemo, self).__init__(_p, data)
         self.callback = []
         self._add_callback()
@@ -204,6 +204,8 @@ class AnimMemo(MemoBase):
         self._add_script_jobs()
         menu.TimeSliderMenu(self)
         self._add_callback()
+
+        #2017以降だとこれを行わないと表示されなかった
         self.show()
 
     def new_memo(self, *args):
@@ -381,6 +383,7 @@ class AnimMemo(MemoBase):
         QtWidgets.QWidget.deleteLater(self)
 
     def paintEvent(self, event):
+        self.resize(self.parent.width(), self.parent.height())
         super(AnimMemo, self).paintEvent(event)
         #GraphEditorMemo(self._draw_data)
         self._draw_timeline_memo()
